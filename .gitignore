@@ -1,0 +1,23 @@
+# Python
+pomodoro/__pycache__/
+pomodoro/**/__pycache__/
+pomodoro/*.pyc
+pomodoro/backend/__pycache__/
+
+# Database (user data)
+pomodoro/pomodoro.db
+
+# Frontend dependencies
+pomodoro/node_modules/
+pomodoro/frontend/node_modules/
+
+# Frontend build output (regenerate with: npm run build)
+pomodoro/frontend/dist/
+
+# PyInstaller build artifacts
+pomodoro/dist/
+pomodoro/build/
+pomodoro/*.spec
+
+# Claude Code config (local)
+.claude/
