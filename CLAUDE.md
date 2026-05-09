@@ -200,7 +200,6 @@ cd pomodoro && pyinstaller --name "Pomodoro" --icon pomodoro.ico --onedir --wind
 - 新增文件/目录 → 更新「目录结构」
 - 新增依赖 → 更新「技术栈」或「关键依赖」
 - 变更工作流/命令 → 更新「开发工作流」
-- 修复 Bug → 更新「修改记录」
 - 新增约定/规范 → 更新对应规范章节
 
 ## 自测规则（强制）
@@ -233,6 +232,14 @@ npm run dev
 # 打开 http://localhost:5173 检查 UI
 ```
 
+### Web 访问（web-access skill）
+
+需要 Chrome 开启远程调试端口（9222）才能使用浏览器 CDP 模式。
+项目已配置 PreToolUse hook（`.claude/settings.local.json`），在执行 web-access 相关 curl 命令时自动检测并启动 Chrome：
+```bash
+"C:/Program Files/Google/Chrome/Application/chrome.exe" --remote-debugging-port=9222 --no-first-run
+```
+
 ### 涉及状态/逻辑修改 — 端到端浏览器测试
 使用 Playwright 编写自动化测试脚本，覆盖：
 - 状态变化路径（如：专注→短休息→专注→长休息）
@@ -244,61 +251,5 @@ npm run dev
 cd pomodoro && node test_<name>.mjs
 ```
 
-## 修改记录
-
-### 2026-05-08 — 新增番茄图标
-
-**新增：Pomodoro.exe 番茄图标**
-- 生成番茄主题 .ico 图标（红番茄 + 绿茎秆，含 16~256px 多分辨率）
-- PyInstaller 打包命令新增 `--icon pomodoro.ico` 参数
-- `pomodoro.ico` 文件保留在项目根目录供后续构建使用
 
 
-### 2026-05-08 — Bug 修复：长休息不触发 + 时区修正
-
-**问题 1：长休息从不触发**
-- **根因**：`TimerSection.vue:88-90` 中访问设置项使用 `settings.value.cyclesBeforeLong`（camelCase），但后端 API 返回的键名是 `cycles_before_long`（snake_case）。实际值为 `undefined`，`undefined % any = NaN`，恒不等于 0，永远走短休息分支。
-- **修复文件**：`frontend/src/components/TimerSection.vue`
-  - `completeSession()` 中的 `cyclesBeforeLong` → `cycles_before_long`
-  - 模板中 `settings.cyclesBeforeLong` → `settings.cycles_before_long`
-- **自测**：Playwright 端到端测试验证相变序列 `短休息 → 长休息 → 短休息 → 长休息`，长休息正常触发。
-
-**问题 2：记录时间显示 UTC 而非北京时间**
-- **根因**：后端使用 `datetime.utcnow()` 存储 UTC 时间，前端 `new Date()` 解析无时区标记的 ISO 字符串时与本地时区（UTC+8）错位。
-- **修复文件**：
-  - `backend/main.py`：新增 `now_beijing()` 辅助函数 + `BEIJING = timezone(timedelta(hours=8))`，替换全部 `datetime.utcnow()` 调用
-  - `backend/models.py`：`completed_at` 列默认值从 `datetime.utcnow` 改为 `now_beijing`
-- **验证**：API 返回时间 `00:55` 与当前北京时间 `00:57` 匹配，数据库存储正确。
-
-### 2026-05-08 — 年度折线图 + 批量功能改进
-
-**新增：年度月度统计折线图**
-- `backend/schemas.py`：新增 `MonthlyData`、`YearlyStatsResponse` 模型
-- `backend/main.py`：新增 `GET /api/stats/yearly?year=` 端点，按 strftime 分组月数据
-- `frontend/src/utils/api.js`：新增 `getYearlyStats(year)`
-- `frontend/src/components/StatsSection.vue`：新增年份下拉框 + SVG 手写折线图（12个月）
-- **自测**：API 返回正确 12 个月数据结构，前端构建通过
-
-**新增：单条记录删除 API**
-- `backend/main.py`：新增 `DELETE /api/sessions/{session_id}` 端点
-- `frontend/src/utils/api.js`：新增 `deleteSession(id)`
-- **自测**：curl 测试删除会话成功，不存在 ID 返回 ok 不报错
-
-**修复：统计页数据不刷新**
-- **根因**：StatsSection 只在 `onMounted` 加载年度/柱状图数据，`stats` ref 更新后无响应
-- `frontend/src/components/StatsSection.vue`：新增 `watch(stats)`，自动重算柱状图 + 重载折线图
-- 番茄钟完成和清除记录后统计页立即可见更新
-
-**改进：记录页左滑删除**
-- `frontend/src/components/HistorySection.vue`：鼠标/触摸左滑露出红色删除按钮
-  - 拖拽超过 35px 吸附到 70px，否则回弹
-  - 滑动其他记录或点击空白处收起所有删除按钮
-  - `suppressClick` 机制防止松手后 click 事件误关闭按钮
-
-**改进：清除按钮加强确认**
-- `frontend/src/components/HistorySection.vue`：弹窗改为输入框，需输入"删除数据"才可确认
-- 确定按钮带 `:disabled`，输入不匹配时不可点击
-
-**修复：设置默认值被数据库旧值覆盖**
-- 数据库原有值 1/1/1/2 覆盖了代码默认 25/5/15/4
-- 通过 PUT /api/settings API 重置为正确默认值
