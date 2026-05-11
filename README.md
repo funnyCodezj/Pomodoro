@@ -25,11 +25,11 @@ A minimalist Pomodoro timer desktop app with statistics tracking, built with **F
 <img width="501" height="814" alt="image" src="https://github.com/user-attachments/assets/d1c470c6-d147-42cd-a307-b3862ea66f0c" />
 </br>
 <img width="501" height="814" alt="image" src="https://github.com/user-attachments/assets/d92f2fe0-f2bb-4846-8880-07c9f9a7d481" />
-
+</br>
 <img width="501" height="814" alt="image" src="https://github.com/user-attachments/assets/c4cdaed4-8e01-4bc0-905c-c11774e4b1c1" />
-
+</br>
 <img width="501" height="814" alt="image" src="https://github.com/user-attachments/assets/01482911-a556-48a5-8627-85476be177ce" />
-
+</br>
 <img width="501" height="814" alt="image" src="https://github.com/user-attachments/assets/6d1527e3-bf20-4ca3-8568-201f6bf4cfe4" />
 
 ---
