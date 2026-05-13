@@ -1,6 +1,6 @@
 # 🍅 番茄钟 (Pomodoro Timer)
 
-[English](#english) | [中文](#中文)
+[中文](#中文) | [English](#english)
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688) ![Vue](https://img.shields.io/badge/Vue_3-4FC08D) ![PyWebView](https://img.shields.io/badge/PyWebView-4-2D7D9A) ![License](https://img.shields.io/badge/license-MIT-green)
 
