@@ -69,6 +69,7 @@ cd pomodoro/frontend && npm run build
 cd ..
 pyinstaller --name "Pomodoro" --icon pomodoro.ico --onedir --windowed \
   --add-data "frontend/dist;frontend/dist" \
+  --add-data "logo.ico;." \
   --hidden-import webview --hidden-import webview.platforms.winforms \
   --hidden-import uvicorn --hidden-import uvicorn.logging \
   --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto \
@@ -205,6 +206,7 @@ cd pomodoro/frontend && npm run build
 cd ..
 pyinstaller --name "Pomodoro" --icon pomodoro.ico --onedir --windowed \
   --add-data "frontend/dist;frontend/dist" \
+  --add-data "logo.ico;." \
   --hidden-import webview --hidden-import webview.platforms.winforms \
   --hidden-import uvicorn --hidden-import uvicorn.logging \
   --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto \

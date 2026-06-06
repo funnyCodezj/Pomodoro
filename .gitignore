@@ -17,5 +17,9 @@ pomodoro/dist/
 pomodoro/build/
 pomodoro/*.spec
 
-# Claude Code config (local)
+# AI tool config (local)
 .claude/
+.remember/
+
+# Env
+.env
