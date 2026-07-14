@@ -23,11 +23,22 @@ const stats = ref({
   current_streak: 0,
 })
 const sessions = ref([])
+const errorMessage = ref('')
+let errorTimeoutId = null
 
 provide('settings', settings)
 provide('stats', stats)
 provide('sessions', sessions)
 provide('refreshStats', refreshStats)
+provide('notifyError', notifyError)
+
+function notifyError(message) {
+  errorMessage.value = message || '操作失败，请稍后重试。'
+  clearTimeout(errorTimeoutId)
+  errorTimeoutId = setTimeout(() => {
+    errorMessage.value = ''
+  }, 5000)
+}
 
 async function refreshStats() {
   try {
@@ -39,6 +50,7 @@ async function refreshStats() {
     sessions.value = newSessions
   } catch (e) {
     console.error('Failed to fetch stats:', e)
+    notifyError('无法加载统计数据，请确认应用服务正在运行。')
   }
 }
 
@@ -47,6 +59,7 @@ async function loadSettings() {
     settings.value = await api.getSettings()
   } catch (e) {
     console.error('Failed to load settings:', e)
+    notifyError('无法加载设置，请确认应用服务正在运行。')
   }
 }
 
@@ -62,6 +75,10 @@ onMounted(() => {
       <div class="logo">🍅 番茄钟</div>
       <button class="gear-btn" @click="showSettings = true">⚙️</button>
     </header>
+
+    <div v-if="errorMessage" class="error-toast" role="alert">
+      {{ errorMessage }}
+    </div>
 
     <main class="content">
       <TimerSection v-show="activeTab === 'timer'" />
@@ -140,6 +157,21 @@ onMounted(() => {
 .content {
   flex: 1;
   overflow-y: auto;
+}
+
+.error-toast {
+  position: absolute;
+  top: 58px;
+  left: 20px;
+  right: 20px;
+  z-index: 200;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  border-radius: var(--radius-xs);
+  background: rgba(101, 31, 40, 0.96);
+  color: #ffe4e4;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
 }
 
 .tab-bar {

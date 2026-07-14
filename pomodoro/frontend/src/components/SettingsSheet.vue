@@ -4,6 +4,7 @@ import { api } from '../utils/api.js'
 
 const emit = defineEmits(['close'])
 const settings = inject('settings')
+const notifyError = inject('notifyError', () => {})
 
 const local = ref({ ...settings.value })
 const saving = ref(false)
@@ -16,6 +17,7 @@ async function save() {
     emit('close')
   } catch (e) {
     console.error('Failed to save settings:', e)
+    notifyError('设置保存失败，请稍后重试。')
   } finally {
     saving.value = false
   }

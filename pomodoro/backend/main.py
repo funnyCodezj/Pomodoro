@@ -7,7 +7,7 @@ BEIJING = timezone(timedelta(hours=8))
 def now_beijing() -> datetime:
     return datetime.now(BEIJING)
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -56,7 +56,10 @@ def create_session(session: SessionCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/sessions", response_model=list[SessionResponse])
-def get_sessions(limit: int = 100, db: Session = Depends(get_db)):
+def get_sessions(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
     return (
         db.query(PomodoroSession)
         .order_by(PomodoroSession.completed_at.desc())
@@ -69,64 +72,78 @@ def get_sessions(limit: int = 100, db: Session = Depends(get_db)):
 def get_stats(db: Session = Depends(get_db)):
     now = now_beijing()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=6)
+    tomorrow_start = today_start + timedelta(days=1)
 
-    # Today
-    today_sessions = (
-        db.query(PomodoroSession)
+    # Today and all-time totals are aggregated in SQLite so the amount of data
+    # transferred to Python remains constant as the history grows.
+    today_focus, today_count = (
+        db.query(
+            func.coalesce(func.sum(PomodoroSession.duration), 0),
+            func.count(PomodoroSession.id),
+        )
         .filter(
             PomodoroSession.type == "work",
             PomodoroSession.completed_at >= today_start,
         )
+        .one()
+    )
+
+    total_focus, total_count = (
+        db.query(
+            func.coalesce(func.sum(PomodoroSession.duration), 0),
+            func.count(PomodoroSession.id),
+        )
+        .filter(PomodoroSession.type == "work")
+        .one()
+    )
+
+    # Fetch seven daily totals in one grouped query instead of one query per day.
+    daily_rows = (
+        db.query(
+            func.date(PomodoroSession.completed_at).label("date"),
+            func.coalesce(func.sum(PomodoroSession.duration), 0).label("seconds"),
+        )
+        .filter(
+            PomodoroSession.type == "work",
+            PomodoroSession.completed_at >= week_start,
+            PomodoroSession.completed_at < tomorrow_start,
+        )
+        .group_by(func.date(PomodoroSession.completed_at))
         .all()
     )
-    today_focus = sum(s.duration for s in today_sessions)
-    today_count = len(today_sessions)
+    daily_seconds = {row.date: row.seconds for row in daily_rows}
 
-    # All time
-    all_work = (
-        db.query(PomodoroSession).filter(PomodoroSession.type == "work").all()
-    )
-    total_focus = sum(s.duration for s in all_work)
-    total_count = len(all_work)
-
-    # Week data
     week_data = []
     for i in range(7):
         day = today_start - timedelta(days=i)
-        day_end = day + timedelta(days=1)
-        day_sessions = (
-            db.query(PomodoroSession)
-            .filter(
-                PomodoroSession.type == "work",
-                PomodoroSession.completed_at >= day,
-                PomodoroSession.completed_at < day_end,
-            )
-            .all()
-        )
         week_data.append(
             WeekData(
                 date=day.strftime("%Y-%m-%d"),
                 weekday=_weekday_cn(day),
-                seconds=sum(s.duration for s in day_sessions),
+                seconds=daily_seconds.get(day.strftime("%Y-%m-%d"), 0),
             )
         )
     week_data.reverse()
 
-    # Streak: consecutive days with at least one work session
+    # One query supplies the active dates used for the streak calculation.
+    streak_start = today_start - timedelta(days=364)
+    active_days = {
+        row.date
+        for row in db.query(func.date(PomodoroSession.completed_at).label("date"))
+        .filter(
+            PomodoroSession.type == "work",
+            PomodoroSession.completed_at >= streak_start,
+            PomodoroSession.completed_at < tomorrow_start,
+        )
+        .distinct()
+        .all()
+    }
+
     streak = 0
     check_date = today_start
     for _ in range(365):
-        day_end = check_date + timedelta(days=1)
-        count = (
-            db.query(PomodoroSession)
-            .filter(
-                PomodoroSession.type == "work",
-                PomodoroSession.completed_at >= check_date,
-                PomodoroSession.completed_at < day_end,
-            )
-            .count()
-        )
-        if count > 0:
+        if check_date.strftime("%Y-%m-%d") in active_days:
             streak += 1
             check_date -= timedelta(days=1)
         else:

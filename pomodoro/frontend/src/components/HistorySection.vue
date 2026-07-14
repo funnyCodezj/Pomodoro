@@ -4,6 +4,7 @@ import { api } from '../utils/api.js'
 
 const sessions = inject('sessions')
 const refreshStats = inject('refreshStats')
+const notifyError = inject('notifyError', () => {})
 
 const showConfirm = ref(false)
 const confirmText = ref('')
@@ -53,6 +54,7 @@ async function doClear() {
     await refreshStats()
   } catch (e) {
     console.error(e)
+    notifyError('清空记录失败，请稍后重试。')
   }
 }
 
@@ -122,6 +124,7 @@ async function deleteSession(id) {
     await refreshStats()
   } catch (e) {
     console.error(e)
+    notifyError('删除记录失败，请稍后重试。')
   }
 }
 

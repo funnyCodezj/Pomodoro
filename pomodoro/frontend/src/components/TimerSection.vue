@@ -4,6 +4,7 @@ import { api } from '../utils/api.js'
 
 const settings = inject('settings')
 const refreshStats = inject('refreshStats')
+const notifyError = inject('notifyError', () => {})
 
 const phase = ref('work') // work | short_break | long_break
 const status = ref('idle') // idle | running | paused
@@ -12,6 +13,8 @@ const currentCycle = ref(0) // completed work cycles before long break
 const totalTime = ref(0)
 
 let timeoutId = null
+let deadline = null
+const TIMER_STORAGE_KEY = 'pomodoro.timer-state.v1'
 
 const durationMap = computed(() => ({
   work: settings.value.work_duration * 60,
@@ -19,11 +22,12 @@ const durationMap = computed(() => ({
   long_break: settings.value.long_break * 60,
 }))
 
-function resetTimer() {
-  stopTimer()
+function resetTimer(shouldPersist = true) {
+  stopTimer(false)
   status.value = 'idle'
   totalTime.value = durationMap.value[phase.value]
   timeLeft.value = totalTime.value
+  if (shouldPersist) persistTimer()
 }
 
 function start() {
@@ -48,24 +52,31 @@ function skip() {
 }
 
 function startTimer() {
-  stopTimer()
+  stopTimer(false)
+  deadline = Date.now() + timeLeft.value * 1000
+  persistTimer()
+
   const tick = () => {
-    timeLeft.value--
+    const remainingMs = deadline - Date.now()
+    timeLeft.value = Math.max(0, Math.ceil(remainingMs / 1000))
     if (timeLeft.value <= 0) {
-      timeLeft.value = 0
       completeSession(false)
     } else {
-      timeoutId = setTimeout(tick, 1000)
+      // Wake up at the next displayed second instead of assuming each timeout is exact.
+      const nextTick = remainingMs - (timeLeft.value - 1) * 1000
+      timeoutId = setTimeout(tick, Math.max(50, Math.min(1000, nextTick)))
     }
   }
-  timeoutId = setTimeout(tick, 1000)
+  tick()
 }
 
-function stopTimer() {
+function stopTimer(shouldPersist = true) {
   if (timeoutId !== null) {
     clearTimeout(timeoutId)
     timeoutId = null
   }
+  deadline = null
+  if (shouldPersist) persistTimer()
 }
 
 async function completeSession(skipped) {
@@ -73,13 +84,16 @@ async function completeSession(skipped) {
   status.value = 'idle'
   const wasWork = phase.value === 'work'
 
-  if (wasWork && !skipped) {
+  const completedWork = wasWork && !skipped
+
+  if (completedWork) {
     currentCycle.value++
     try {
       await api.createSession('work', totalTime.value)
       refreshStats()
     } catch (e) {
       console.error('Failed to save session:', e)
+      notifyError('专注记录保存失败，请稍后重试。')
     }
     playNotification()
   }
@@ -87,14 +101,65 @@ async function completeSession(skipped) {
   if (wasWork) {
     const cyclesBeforeLong = settings.value.cycles_before_long
     phase.value =
-      currentCycle.value % cyclesBeforeLong === 0 ? 'long_break' : 'short_break'
+      completedWork && currentCycle.value % cyclesBeforeLong === 0
+        ? 'long_break'
+        : 'short_break'
   } else {
     phase.value = 'work'
   }
 
   totalTime.value = durationMap.value[phase.value]
   timeLeft.value = totalTime.value
+  persistTimer()
   start()
+}
+
+function persistTimer() {
+  try {
+    localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify({
+      phase: phase.value,
+      status: status.value,
+      timeLeft: timeLeft.value,
+      totalTime: totalTime.value,
+      currentCycle: currentCycle.value,
+      endsAt: status.value === 'running' ? deadline : null,
+    }))
+  } catch (e) {
+    // Storage can be unavailable in restricted browser contexts.
+  }
+}
+
+function restoreTimer() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TIMER_STORAGE_KEY))
+    if (!saved || !['work', 'short_break', 'long_break'].includes(saved.phase)) return
+
+    phase.value = saved.phase
+    currentCycle.value = Number.isInteger(saved.currentCycle) && saved.currentCycle >= 0
+      ? saved.currentCycle
+      : 0
+    totalTime.value = Number.isFinite(saved.totalTime) && saved.totalTime > 0
+      ? saved.totalTime
+      : durationMap.value[phase.value]
+
+    if (saved.status === 'running' && Number.isFinite(saved.endsAt)) {
+      const remaining = Math.ceil((saved.endsAt - Date.now()) / 1000)
+      if (remaining > 0) {
+        timeLeft.value = remaining
+        status.value = 'running'
+        startTimer()
+        return
+      }
+    }
+
+    timeLeft.value = Number.isFinite(saved.timeLeft) && saved.timeLeft >= 0
+      ? saved.timeLeft
+      : totalTime.value
+    status.value = saved.status === 'paused' && timeLeft.value > 0 ? 'paused' : 'idle'
+    if (timeLeft.value <= 0) resetTimer()
+  } catch (e) {
+    // Start with a new timer if a previous storage value is malformed.
+  }
 }
 
 function playNotification() {
@@ -163,10 +228,17 @@ watch(
   { deep: true }
 )
 
-// Initialize
-resetTimer()
+// Initialize without overwriting a possible saved timer, then restore it.
+resetTimer(false)
+restoreTimer()
 
-onUnmounted(() => stopTimer())
+watch([phase, status, timeLeft, totalTime, currentCycle], persistTimer)
+
+onUnmounted(() => {
+  if (timeoutId !== null) clearTimeout(timeoutId)
+  timeoutId = null
+  persistTimer()
+})
 </script>
 
 <template>

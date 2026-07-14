@@ -1,11 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 
 class SessionCreate(BaseModel):
-    type: str
-    duration: int
+    type: Literal["work", "short_break", "long_break"]
+    duration: int = Field(ge=1, le=14_400)
 
 
 class SessionResponse(BaseModel):
@@ -19,10 +19,10 @@ class SessionResponse(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
-    work_duration: Optional[int] = None
-    short_break: Optional[int] = None
-    long_break: Optional[int] = None
-    cycles_before_long: Optional[int] = None
+    work_duration: Optional[int] = Field(default=None, ge=1, le=120)
+    short_break: Optional[int] = Field(default=None, ge=1, le=30)
+    long_break: Optional[int] = Field(default=None, ge=1, le=60)
+    cycles_before_long: Optional[int] = Field(default=None, ge=2, le=10)
 
 
 class WeekData(BaseModel):
